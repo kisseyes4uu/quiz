@@ -313,7 +313,12 @@ function buildQS(){
     const cfg=QUIZ_CONFIG[name]||{pick:0,sub:''},cat=CAT_IDX[name];
     const usedK=buildQS._k||(buildQS._k=new Set());
          let n=0;
-         shuffle(QUIZ_BANK.filter(x=>x.c===name)).filter(x=>{if(n>=cfg.pick)return false;if(x.k){if(usedK.has(x.k))return false;usedK.add(x.k)}n++;return true}).forEach(x=>{
+         let pool=shuffle(QUIZ_BANK.filter(x=>x.c===name));
+         if(name==='OX'){ // O와 X가 골고루 나오도록 X를 1~2문제 섞기
+           const xs=pool.filter(x=>x.a==='X'),os=pool.filter(x=>x.a!=='X'),nx=Math.min(xs.length,1+(Math.random()<.5?1:0));
+           pool=shuffle(xs.slice(0,nx).concat(os.slice(0,Math.max(0,cfg.pick-nx))));
+         }
+         pool.filter(x=>{if(n>=cfg.pick)return false;if(x.k){if(usedK.has(x.k))return false;usedK.add(x.k)}n++;return true}).forEach(x=>{
       if(name==='OX')out.push({cat,type:'ox',q:x.q,sub:cfg.sub,a:x.a,exp:x.exp});
       else if(name==='낱말찾기')out.push({cat,type:'grid',letters:x.letters,words:x.words});
       else out.push({cat,type:'mc',q:x.q,sub:cfg.sub,a:x.a,wrong:shuffle(x.w).slice(0,2),exp:x.exp});
