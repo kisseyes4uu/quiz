@@ -428,8 +428,7 @@ const LNAME=['가로 윗줄','가로 가운뎃줄','가로 아랫줄','세로 �
 function showGrid(q){
   const found=LINES.map((l,i)=>({l,i,w:l.map(x=>q.letters[x]).join('')})).filter(o=>q.words.includes(o.w));
   const n=found.length;
-  const cand=shuffle([n-2,n-1,n+1,n+2].filter(x=>x>=0&&x!==n)).slice(0,2);
-  const opts=[n,...cand].sort((a,b)=>a-b);
+  const opts=[1,2,3]; // 보기는 항상 ① 1개 ② 2개 ③ 3개
   R.innerHTML=head(q)+`<div class="qtext g">9칸에서 가로·세로·대각선으로 읽을 수 있는 <span style="color:#1f4fd8">3글자 낱말</span>은 모두 몇 개일까요?<small>위에서 아래로, 왼쪽에서 오른쪽으로 읽어요 (대각선은 ↘ ↙ 두 줄)</small></div>
   <div class="gwrap"><div class="gg view" id="gg">${q.letters.map(l=>`<button class="cell" disabled>${l}</button>`).join('')}</div>
   <div class="qopts"></div></div><div class="qfb" id="fb"></div>`;
