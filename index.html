@@ -305,12 +305,14 @@ $('go').onclick=()=>{
 /* ===== 퀴즈 ===== */
 const CATS=[
  {k:'순우리말',i:'🌸',c:'#1f4fd8'},{k:'MZ세대어',i:'😎',c:'#7b5cff'},{k:'사자성어',i:'📜',c:'#c98a00'},
- {k:'속담',i:'💬',c:'#2fa86a'},{k:'넌센스 퀴즈',i:'🤪',c:'#ff4f7d'},{k:'우리말 유래',i:'📖',c:'#0f8fb5'},{k:'3×3 낱말 찾기',i:'🔤',c:'#1f4fd8'},{k:'O X 퀴즈',i:'⭕',c:'#e8334f'}
+ {k:'속담',i:'💬',c:'#2fa86a'},{k:'넌센스 퀴즈',i:'🤪',c:'#ff4f7d'},{k:'우리말 유래',i:'📖',c:'#0f8fb5'},{k:'3×3 낱말 찾기',i:'🔤',c:'#1f4fd8'},{k:'O X 퀴즈',i:'⭕',c:'#e8334f'},
+ {k:'역사',i:'🏯',c:'#8b5a2b'},{k:'경제',i:'💰',c:'#2e8b57'},{k:'과학',i:'🔬',c:'#0b7bbf'},{k:'정치·사회',i:'🏛️',c:'#5b4fcf'},{k:'지리',i:'🗺️',c:'#1a8f7a'},
+ {k:'문화·예술',i:'🎨',c:'#d6479b'},{k:'스포츠',i:'⚽',c:'#e8590c'},{k:'IT·기술',i:'📱',c:'#3b5bdb'},{k:'건강·생활',i:'💪',c:'#d9480f'},{k:'시사·트렌드',i:'📰',c:'#495057'}
 ];
 let QS=[]; // 문제는 questions.js 의 문제 은행에서 접속할 때마다 무작위로 뽑아 만듭니다
-const CAT_IDX={'순우리말':0,'MZ세대어':1,'사자성어':2,'속담':3,'넌센스':4,'우리말유래':5,'낱말찾기':6,'OX':7};
+const CAT_IDX={'순우리말':0,'MZ세대어':1,'사자성어':2,'속담':3,'넌센스':4,'우리말유래':5,'낱말찾기':6,'OX':7,'역사':8,'경제':9,'과학':10,'정치ㆍ사회':11,'지리':12,'문화ㆍ예술':13,'스포츠':14,'ITㆍ기술':15,'건강ㆍ생활':16,'시사ㆍ트렌드':17};
 function buildQS(){
-  buildQS._k=new Set();
+  buildQS._k=new Set();WR=[];
   const out=[];
   Object.keys(CAT_IDX).forEach(name=>{
     const cfg=QUIZ_CONFIG[name]||{pick:0,sub:''},cat=CAT_IDX[name];
@@ -329,14 +331,15 @@ function buildQS(){
   });
   QS=shuffle(out); // 분야 순서까지 무작위로 섞기
 }
-const BASE=50,PREP=3,LIMIT=10,REVEAL=3000;
-let cur=0,score=0,me={road:'',name:''},timer=null,tStart=0,nxt=null;
+const BASE=100,PREP=3,LIMIT=10,REVEAL=3000;
+let WR=[];let cur=0,score=0,me={road:'',name:''},timer=null,tStart=0,nxt=null;
 const shuffle=a=>{a=a.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a};
 const R=$('qright');
 const stopTimer=()=>{clearInterval(timer);timer=null};
-// 남은 시간(표시되는 초) / 점수: 5초 이상 남으면 50점, 5초 미만이면 1초당 10점씩 감점
+// 남은 시간(표시되는 초) / 점수: 남은 시간 1초당 10점 (10초 남으면 100점, 9초 90점, 5초 50점 …)
 const secLeft=()=>Math.max(0,Math.ceil(LIMIT-(Date.now()-tStart)/1000));
-const pointsNow=()=>{const s=secLeft();return s>=5?BASE:s*10};
+const pointsNow=()=>secLeft()*10;
+function logWrong(q,correct,mine,exp){WR.push({q:q.type==='grid'?'낱말 찾기 — 글자: '+q.letters.join(' ')+' (읽을 수 있는 3글자 낱말은 몇 개?)':q.q,correct:correct,mine:mine==null?'시간 초과':mine,exp:exp||''})}
 function tag(q){const c=CATS[q.cat];return `<span class="qtag" style="background:${c.c}">${c.i} ${c.k}</span>`}
 function head(q){return `<div class="qtop">${tag(q)}<span class="qnum" id="tm">${LIMIT}초</span></div><div class="bar"><i id="tb"></i></div>`}
 function runTimer(onEnd){
@@ -399,13 +402,13 @@ function showMC(q){
     const b=document.createElement('button');b.className='qopt';b.textContent=`${'①②③'[i]} ${o}`;
     b.onclick=()=>{
       const p=pointsNow(),s=secLeft();stopTimer();lock();
-      const ok=o===q.a;if(!ok)b.classList.add('no');
+      const ok=o===q.a;if(!ok){b.classList.add('no');logWrong(q,q.a,o,q.exp)}
       fb.className='qfb show '+(ok?'ok':'no');
       fb.innerHTML=ok?`<b>🎉 정답입니다! +${p}P</b> (남은 시간 ${s}초)<br>${q.exp}`:`<b>😅 아쉬워요! 0P · 정답은 “${q.a}”</b><br>${q.exp}`;
       (ok?sndOk:sndNo)();if(ok)addScore(p);nextBtn();
     };box.appendChild(b);
   });
-  runTimer(()=>{lock();sndNo();fb.className='qfb show no';fb.innerHTML=`<b>⏰ 시간이 지났어요! 0P</b><br>정답은 “${q.a}”<br>${q.exp}`;nextBtn()});
+  runTimer(()=>{lock();sndNo();logWrong(q,q.a,null,q.exp);fb.className='qfb show no';fb.innerHTML=`<b>⏰ 시간이 지났어요! 0P</b><br>정답은 “${q.a}”<br>${q.exp}`;nextBtn()});
 }
 function showOX(q){
   R.innerHTML=head(q)+`<div class="qtext">${q.q}<small>${q.sub}</small></div><div class="oxrow"><button class="oxbtn o" data-v="O">O</button><button class="oxbtn x" data-v="X">X</button></div><div class="qfb" id="fb"></div>`;
@@ -416,12 +419,12 @@ function showOX(q){
     else b.classList.add('dim');});
   btns.forEach(b=>b.onclick=()=>{
     const p=pointsNow(),s=secLeft();stopTimer();lock(b.dataset.v);
-    const ok=b.dataset.v===q.a;
+    const ok=b.dataset.v===q.a;if(!ok)logWrong(q,q.a,b.dataset.v,q.exp);
     fb.className='qfb show '+(ok?'ok':'no');
     fb.innerHTML=ok?`<b>🎉 정답입니다! +${p}P</b> (남은 시간 ${s}초)<br>${q.exp}`:`<b>😅 아쉬워요! 0P · 정답은 ${q.a}</b><br>${q.exp}`;
     (ok?sndOk:sndNo)();if(ok)addScore(p);nextBtn();
   });
-  runTimer(()=>{lock(null);sndNo();fb.className='qfb show no';fb.innerHTML=`<b>⏰ 시간이 지났어요! 0P</b><br>정답은 ${q.a}<br>${q.exp}`;nextBtn()});
+  runTimer(()=>{lock(null);sndNo();logWrong(q,q.a,null,q.exp);fb.className='qfb show no';fb.innerHTML=`<b>⏰ 시간이 지났어요! 0P</b><br>정답은 ${q.a}<br>${q.exp}`;nextBtn()});
 }
 const LINES=[[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
 const LNAME=['가로 윗줄','가로 가운뎃줄','가로 아랫줄','세로 왼쪽','세로 가운데','세로 오른쪽','대각선 ↘','대각선 ↙'];
@@ -442,20 +445,24 @@ function showGrid(q){
     const b=document.createElement('button');b.className='qopt';b.textContent=`${'①②③'[i]} ${o}개`;
     b.onclick=()=>{
       const p=pointsNow(),s=secLeft();stopTimer();lock();
-      const ok=o===n;if(!ok)b.classList.add('no');
+      const ok=o===n;if(!ok){b.classList.add('no');logWrong(q,n+'개',o+'개',list)}
       fb.className='qfb show '+(ok?'ok':'no');
       fb.innerHTML=ok?`<b>🎉 정답입니다! +${p}P</b> (남은 시간 ${s}초)<br>${list}`:`<b>😅 아쉬워요! 0P · 정답은 ${n}개</b><br>${list}`;
       (ok?sndOk:sndNo)();if(ok)addScore(p);nextBtn();
     };box.appendChild(b);
   });
-  runTimer(()=>{lock();sndNo();fb.className='qfb show no';fb.innerHTML=`<b>⏰ 시간이 지났어요! 0P</b><br>정답은 ${n}개<br>${list}`;nextBtn()});
+  runTimer(()=>{lock();sndNo();logWrong(q,n+'개',null,list);fb.className='qfb show no';fb.innerHTML=`<b>⏰ 시간이 지났어요! 0P</b><br>정답은 ${n}개<br>${list}`;nextBtn()});
 }
 function result(){
   const max=QS.length*BASE,pct=score/max;
   const [e,m]=pct>=.8?['🏆','대단하세요! 퀴즈 박사님!']:pct>=.5?['🎉','훌륭해요! 아주 잘하셨어요!']:pct>=.25?['😊','잘하셨어요! 다시 도전해 보세요!']:['💪','수고하셨어요! 한 번 더 도전해 볼까요?'];
   R.innerHTML=`<div class="res"><div class="big">${e}</div><h2>${me.name}님, 수고하셨습니다!</h2>
   <div class="pt">${score}P <span style="font-size:28px;color:#5a6486">/ ${max}P</span></div><p>${me.road} · ${m}</p>
+  <p style="font-size:22px;margin:6px 0">⭕ 맞힌 문제 ${QS.length-WR.length}개 · ❌ 틀린 문제 ${WR.length}개</p>
+  ${WR.length?`<button id="wrBtn" style="display:block;width:100%;max-width:420px;margin:12px auto;background:#ffe3ea;color:#b3223f;border:2px solid #f3a5b6;border-radius:99px;font:inherit;font-size:22px;font-weight:700;padding:12px 0;cursor:pointer">❌ 틀린 문제 ${WR.length}개 보기 ▾</button>
+  <div id="wrList" style="display:none;max-width:560px;margin:0 auto 16px;text-align:left">${WR.map((w,i)=>`<div style="background:#fff5f7;border:2px solid #f3c4cf;border-radius:16px;padding:14px 16px;margin-bottom:12px;font-size:18px;line-height:1.55;color:#222"><b>${i+1}. ${w.q}</b><br><span style="color:#b3223f">내 답: ${w.mine}</span><br><span style="color:#157a45"><b>정답: ${w.correct}</b></span><br><span style="color:#444">풀이: ${w.exp}</span></div>`).join('')}</div>`:`<p style="font-size:20px;color:#157a45;font-weight:700">🎉 모두 맞히셨어요!</p>`}
   <button class="qnext show" id="again" style="display:block;width:100%;max-width:420px;margin:0 auto">다시 도전하기</button></div>`;
+  const wb=$('wrBtn');if(wb)wb.onclick=()=>{const l=$('wrList'),o=l.style.display==='none';l.style.display=o?'block':'none';wb.textContent='❌ 틀린 문제 '+WR.length+'개 '+(o?'닫기 ▴':'보기 ▾')};
   $('again').onclick=()=>{buildQS();cur=0;score=0;$('meScore').textContent=0;show()};
 }
 $('logout').onclick=()=>{if(confirm('나가시겠어요? 점수는 저장되지 않습니다.')){clearTimeout(nxt);stopTimer();cdHide();document.body.classList.remove('in-quiz');window.scrollTo(0,0)}};
