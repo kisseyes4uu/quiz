@@ -390,6 +390,10 @@ function speakSynth(t){
   }catch(e){}
 }
 function hush(){PSEQ++;try{AUS.forEach(a=>{try{a.pause()}catch(e){}});AUS=[]}catch(e){}try{synth&&synth.cancel()}catch(e){}}
+let PRE={};
+function preloadQ(q){ // 카운트다운(3·2·1) 동안 이 문제의 음성을 미리 받아 둠 → 문제가 뜨자마자 바로 재생
+  try{PRE={};partsOf(q,[]).forEach(t=>{const a=new Audio(clipUrl(t));a.preload='auto';try{a.load()}catch(e){}PRE[t]=a})}catch(e){}
+}
 function say(parts){
   LAST_SAY=parts;
   if(!TTS_ON||!parts||!parts.length)return;
@@ -397,7 +401,7 @@ function say(parts){
   hush();
   const my=PSEQ;
   // 모든 조각을 미리 받아 두고, 앞 조각이 끝나기 직전에 다음 조각을 바로 이어서 재생 (끊김·쉬는 시간 없음)
-  const as=parts.map(t=>{const a=new Audio(clipUrl(t));a.preload='auto';return a});
+  const as=parts.map(t=>{const a=PRE[t]||new Audio(clipUrl(t));a.preload='auto';try{a.currentTime=0}catch(e){}return a});
   AUS=as.slice();
   const started=[];let cur=0,failed=false,iv=null;
   const fb=k=>{if(failed||my!==PSEQ)return;failed=true;clearInterval(iv);AUS.forEach(a=>{try{a.pause()}catch(e){}});speakSynth(parts.slice(k).join(' '))};
@@ -468,7 +472,7 @@ function show(){
   clearTimeout(nxt);stopTimer();cdHide();hush();R.scrollTop=0;window.scrollTo(0,0);goQ();
   if(cur>=QS.length)return result();
   const q=QS[cur];
-  R.innerHTML='';
+  R.innerHTML='';preloadQ(q);
   let n=PREP;cdShow(n);sndReady();
   timer=setInterval(()=>{
     n--;
