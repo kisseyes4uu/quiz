@@ -431,9 +431,8 @@ function readQ(q,opts){say(partsOf(q,opts))}
 function ttsUI(){const b=$('ttsBtn');b.classList.toggle('off',!TTS_ON);b.textContent=TTS_ON?'🔊 읽어주기':'🔇 읽어주기 꺼짐'}
 $('ttsBtn').onclick=()=>{TTS_ON=!TTS_ON;try{localStorage.setItem('tts',TTS_ON?'on':'off')}catch(e){}ttsUI();if(TTS_ON)say(LAST_SAY);else hush()};
 ttsUI();
-if(!synth)$('ttsBtn').style.display='none';
 function addReplay(){ // 문제 아래 '다시 듣기' 버튼
-  const qt=R.querySelector('.qtext');if(!qt||!synth)return;
+  const qt=R.querySelector('.qtext');if(!qt)return;
   const b=document.createElement('button');b.type='button';b.className='ttsre';b.textContent='🔁 다시 듣기';
   b.onclick=()=>{const was=TTS_ON;TTS_ON=true;say(LAST_SAY);TTS_ON=was};
   qt.insertAdjacentElement('afterend',b);
