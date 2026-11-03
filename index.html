@@ -66,6 +66,9 @@ body.in-quiz .quiz{display:grid}
 .qhead .lo{background:none;border:0;cursor:pointer;padding:6px;display:grid;place-items:center}
 .qme{display:flex;align-items:center;justify-content:space-between;padding:12px 18px;gap:10px}
 .qme b{font-size:20px}.qme span.n{color:#777;font-size:17px;margin-left:4px}
+.tts{border:2px solid #b9c6f5;background:#eef2ff;color:#1f4fd8;border-radius:99px;font:inherit;font-size:16px;font-weight:700;padding:6px 12px;cursor:pointer;white-space:nowrap}
+.tts.off{background:#f1f1f1;border-color:#d0d0d0;color:#888}
+.ttsre{display:block;margin:10px auto 0;border:2px solid #b9c6f5;background:#fff;color:#1f4fd8;border-radius:99px;font:inherit;font-size:18px;font-weight:700;padding:8px 18px;cursor:pointer}
 .pts{display:flex;align-items:center;gap:8px;font-weight:700;font-size:22px;color:#1f4fd8}
 .pts i{font-style:normal;width:30px;height:30px;border-radius:50%;background:#f5a800;color:#fff;display:grid;place-items:center;font-size:24px;font-weight:700;line-height:1;padding-bottom:2px}
 #stages{display:none}
@@ -261,7 +264,7 @@ body.in-quiz .quiz{display:grid}
       <div class="cnt"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#333" stroke-width="1.8" stroke-linecap="round"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c0-3.6 2.8-6 6.5-6s6.5 2.4 6.5 6"/><circle cx="17" cy="9" r="2.6"/><path d="M17.5 14c2.7.2 4.5 2.2 4.5 5"/></svg><span>1</span></div>
       <button class="lo" id="logout" aria-label="나가기"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#222" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4H5a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1h4"/><path d="M16 8l4 4-4 4M20 12H9"/></svg></button>
     </div>
-    <div class="qme"><div><b id="meRoad"></b><span class="n" id="meName"></span></div><div class="pts"><span><span id="meScore">0</span>P</span><i>+</i></div></div>
+    <div class="qme"><div><b id="meRoad"></b><span class="n" id="meName"></span></div><button type="button" class="tts" id="ttsBtn" aria-label="문제 읽어주기 켜기/끄기">🔊 읽어주기</button><div class="pts"><span><span id="meScore">0</span>P</span><i>+</i></div></div>
     <div id="stages"></div>
     <main class="qbody" id="qright"></main>
   </aside>
@@ -335,7 +338,7 @@ const BASE=100,PREP=3,LIMIT=10,REVEAL=3000;
 let WR=[];let cur=0,score=0,me={road:'',name:''},timer=null,tStart=0,nxt=null;
 const shuffle=a=>{a=a.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a};
 const R=$('qright');
-const stopTimer=()=>{clearInterval(timer);timer=null};
+const stopTimer=()=>{clearInterval(timer);timer=null;hush()};
 // 남은 시간(표시되는 초) / 점수: 남은 시간 1초당 10점 (10초 남으면 100점, 9초 90점, 5초 50점 …)
 const secLeft=()=>Math.max(0,Math.ceil(LIMIT-(Date.now()-tStart)/1000));
 const pointsNow=()=>secLeft()*10;
@@ -354,6 +357,87 @@ function runTimer(onEnd){
 }
 function addScore(p){score+=p;$('meScore').textContent=score}
 function nextBtn(){const f=$('fb');if(f)setTimeout(()=>f.scrollIntoView({block:'nearest',behavior:'smooth'}),50);clearTimeout(nxt);nxt=setTimeout(()=>{cur++;show()},REVEAL)} // 정답 확인 후 자동으로 다음 문제
+
+// ---- 문제 읽어주기 (브라우저 내장 음성, 가장 자연스러운 한국어 음성 자동 선택) ----
+const synth=window.speechSynthesis;
+let VOICE=null,TTS_ON=true,LAST_SAY='';
+try{TTS_ON=localStorage.getItem('tts')!=='off'}catch(e){}
+function pickVoice(){
+  if(!synth)return;
+  const vs=synth.getVoices().filter(v=>/^ko/i.test((v.lang||'').replace('_','-')));
+  if(!vs.length){VOICE=null;return}
+  const sc=v=>{const n=v.name;let s=0;
+    if(/natural|neural|online/i.test(n))s+=100;           // 윈도우/엣지 신경망 음성 (SunHi 등)
+    if(/google/i.test(n))s+=60;                            // 크롬/안드로이드 Google 한국어
+    if(/yuna|유나|siri/i.test(n))s+=50;                    // 아이폰·맥 유나
+    if(/sunhi|선히|injoon|인준|heami|해미/i.test(n))s+=20;
+    return s};
+  VOICE=vs.slice().sort((a,b)=>sc(b)-sc(a))[0];
+}
+if(synth){pickVoice();synth.onvoiceschanged=pickVoice}
+// 고품질 음성: audio 폴더의 mp3(미리 만든 신경망 음성)를 재생, 파일이 없으면 브라우저 기본 음성으로 대신 읽음
+let AUS=[],PSEQ=0;
+const H=t=>{let h=0x811c9dc5;for(let i=0;i<t.length;i++){h^=t.charCodeAt(i);h=Math.imul(h,0x01000193)>>>0}return h.toString(16).padStart(8,'0')};
+const clipUrl=t=>'audio/'+H(t)+'.mp3';
+function speakSynth(t){
+  if(!synth||!t)return;
+  try{
+    synth.cancel();
+    const u=new SpeechSynthesisUtterance(t);
+    u.lang='ko-KR';if(VOICE)u.voice=VOICE;
+    u.rate=.92;u.pitch=1;u.volume=1;
+    synth.speak(u);
+  }catch(e){}
+}
+function hush(){PSEQ++;try{AUS.forEach(a=>{try{a.pause()}catch(e){}});AUS=[]}catch(e){}try{synth&&synth.cancel()}catch(e){}}
+function say(parts){
+  LAST_SAY=parts;
+  if(!TTS_ON||!parts||!parts.length)return;
+  if(typeof parts==='string')parts=[parts];
+  hush();
+  const my=PSEQ;
+  // 모든 조각을 미리 받아 두고, 앞 조각이 끝나기 직전에 다음 조각을 바로 이어서 재생 (끊김·쉬는 시간 없음)
+  const as=parts.map(t=>{const a=new Audio(clipUrl(t));a.preload='auto';return a});
+  AUS=as.slice();
+  const started=[];let cur=0,failed=false,iv=null;
+  const fb=k=>{if(failed||my!==PSEQ)return;failed=true;clearInterval(iv);AUS.forEach(a=>{try{a.pause()}catch(e){}});speakSynth(parts.slice(k).join(' '))};
+  const start=k=>{
+    if(my!==PSEQ||failed||k>=as.length||started[k])return;
+    started[k]=true;cur=k;const a=as[k];
+    a.onerror=()=>fb(k);
+    a.onended=()=>start(k+1);
+    try{const pr=a.play();if(pr&&pr.catch)pr.catch(()=>fb(k))}catch(e){fb(k)}
+  };
+  iv=setInterval(()=>{
+    if(my!==PSEQ||failed){clearInterval(iv);return}
+    const a=as[cur];
+    if(a&&a.duration&&a.duration-a.currentTime<0.18)start(cur+1);   // 끝나기 0.18초 전에 다음 조각 시작
+    if(cur>=as.length-1&&a&&a.ended)clearInterval(iv);
+  },25);
+  start(0);
+}
+const JAMO={ㄱ:'기역',ㄲ:'쌍기역',ㄴ:'니은',ㄷ:'디귿',ㄸ:'쌍디귿',ㄹ:'리을',ㅁ:'미음',ㅂ:'비읍',ㅃ:'쌍비읍',ㅅ:'시옷',ㅆ:'쌍시옷',ㅇ:'이응',ㅈ:'지읒',ㅉ:'쌍지읒',ㅊ:'치읓',ㅋ:'키읔',ㅌ:'티읕',ㅍ:'피읖',ㅎ:'히읗'};
+const speakable=h=>String(h).replace(/[ㄱ-ㅎ]+/g,m=>' '+[...m].map(c=>JAMO[c]||c).join(' ')).replace(/[(（][^()（）]*[\u3400-\u9fff\uf900-\ufaff][^()（）]*[)）]/g,'').replace(/[\u3400-\u9fff\uf900-\ufaff]+/g,' ').replace(/<[^>]*>/g,' ').replace(/\(\s*\)/g,' 빈칸 ').replace(/[“”"]/g,'').replace(/[→↘↙]/g,' ').replace(/\s+/g,' ').trim();
+const NUMK=['일번','이번','삼번'];
+const sent=t=>/[.?!]$/.test(t)?t:t+'.';
+const GRID_TAIL=['세 글자 낱말은 모두 몇 개일까요?'];
+const OX_TAIL='맞으면 오, 틀리면 엑스를 눌러주세요.';
+function partsOf(q,opts){
+  if(q.type==='mc')return [sent(speakable(q.q))]; // 보기는 읽지 않고 문제만 읽음
+  if(q.type==='ox')return [sent(speakable(q.q)),OX_TAIL];
+  return [...GRID_TAIL];
+}
+function readQ(q,opts){say(partsOf(q,opts))}
+function ttsUI(){const b=$('ttsBtn');b.classList.toggle('off',!TTS_ON);b.textContent=TTS_ON?'🔊 읽어주기':'🔇 읽어주기 꺼짐'}
+$('ttsBtn').onclick=()=>{TTS_ON=!TTS_ON;try{localStorage.setItem('tts',TTS_ON?'on':'off')}catch(e){}ttsUI();if(TTS_ON)say(LAST_SAY);else hush()};
+ttsUI();
+if(!synth)$('ttsBtn').style.display='none';
+function addReplay(){ // 문제 아래 '다시 듣기' 버튼
+  const qt=R.querySelector('.qtext');if(!qt||!synth)return;
+  const b=document.createElement('button');b.type='button';b.className='ttsre';b.textContent='🔁 다시 듣기';
+  b.onclick=()=>{const was=TTS_ON;TTS_ON=true;say(LAST_SAY);TTS_ON=was};
+  qt.insertAdjacentElement('afterend',b);
+}
 const cd=$('cdown');
 // ---- 출발 신호음 (파일 없이 브라우저에서 직접 만든 소리) ----
 let AC=null;
@@ -382,7 +466,7 @@ const cdHide=()=>{cd.classList.remove('show');cd.innerHTML=''};
 // 휴대폰: 문제 창이 한 화면을 꽉 채우도록 자동으로 내려가고, 위로 올리면 배너가 보임
 function goQ(){const Q=document.querySelector('.quiz'),S=document.querySelector('.qside');if(!Q||!S)return;try{Q.scrollTo({top:S.offsetTop,behavior:'smooth'})}catch(e){Q.scrollTop=S.offsetTop}}
 function show(){
-  clearTimeout(nxt);stopTimer();cdHide();R.scrollTop=0;window.scrollTo(0,0);goQ();
+  clearTimeout(nxt);stopTimer();cdHide();hush();R.scrollTop=0;window.scrollTo(0,0);goQ();
   if(cur>=QS.length)return result();
   const q=QS[cur];
   R.innerHTML='';
@@ -397,6 +481,7 @@ function showMC(q){
   const opts=shuffle([q.a,...q.wrong]);
   R.innerHTML=head(q)+`<div class="qtext">${q.q}<small>${q.sub}</small></div><div class="qopts"></div><div class="qfb" id="fb"></div>`;
   const box=R.querySelector('.qopts'),fb=$('fb');
+  addReplay();readQ(q,opts);
   const lock=()=>box.querySelectorAll('button').forEach((x,k)=>{x.disabled=true;if(opts[k]===q.a)x.classList.add('ok')});
   opts.forEach((o,i)=>{
     const b=document.createElement('button');b.className='qopt';b.textContent=`${'①②③'[i]} ${o}`;
@@ -413,6 +498,7 @@ function showMC(q){
 function showOX(q){
   R.innerHTML=head(q)+`<div class="qtext">${q.q}<small>${q.sub}</small></div><div class="oxrow"><button class="oxbtn o" data-v="O">O</button><button class="oxbtn x" data-v="X">X</button></div><div class="qfb" id="fb"></div>`;
   const btns=[...R.querySelectorAll('.oxbtn')],fb=$('fb');
+  addReplay();readQ(q);
   const lock=pick=>btns.forEach(b=>{b.disabled=true;
     if(b.dataset.v===q.a)b.classList.add('ok');
     else if(b.dataset.v===pick)b.classList.add('no');
@@ -436,6 +522,7 @@ function showGrid(q){
   <div class="gwrap"><div class="gg view" id="gg">${q.letters.map(l=>`<button class="cell" disabled>${l}</button>`).join('')}</div>
   <div class="qopts"></div></div><div class="qfb" id="fb"></div>`;
   const box=R.querySelector('.qopts'),fb=$('fb');
+  addReplay();readQ(q);
   const lock=()=>{
     box.querySelectorAll('button').forEach((x,k)=>{x.disabled=true;if(opts[k]===n)x.classList.add('ok')});
     const cells=[...$('gg').children];found.forEach(o=>o.l.forEach(i=>cells[i].classList.add('done')));
